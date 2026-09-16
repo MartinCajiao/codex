@@ -4,12 +4,13 @@ use std::time::Duration;
 use pretty_assertions::assert_eq;
 
 use super::LspClient;
-use super::default_diagnostics_timeout;
 use crate::LspServerConfig;
 
 #[test]
-fn default_timeout_is_bounded() {
-    assert!(default_diagnostics_timeout() <= Duration::from_secs(10));
+fn startup_defaults_to_ten_seconds() {
+    let server = LspServerConfig::new("pyright-langserver");
+    let client = LspClient::new(&server, Duration::from_millis(200));
+    assert_eq!(client.startup_timeout(), Duration::from_secs(10));
 }
 
 #[tokio::test]

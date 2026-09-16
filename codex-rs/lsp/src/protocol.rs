@@ -73,7 +73,9 @@ async fn read_headers<R: AsyncRead + Unpin>(reader: &mut BufReader<R>) -> Result
             content_length = Some(rest.trim().parse().context("invalid Content-Length")?);
         }
     }
-    content_length.context("missing Content-Length header")
+    content_length
+        .context("missing Content-Length header")
+        .map(Some)
 }
 
 /// Write one JSON-RPC value with LSP framing.

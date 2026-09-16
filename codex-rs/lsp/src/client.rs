@@ -23,7 +23,6 @@ use crate::protocol::MessageReader;
 use crate::protocol::write_message;
 
 const DEFAULT_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
-const DEFAULT_DIAGNOSTICS_TIMEOUT: Duration = Duration::from_millis(1500);
 const MAX_DIAGNOSTICS_PER_FILE: usize = 50;
 
 /// Diagnostics-only client for one stdio language server.
@@ -49,7 +48,6 @@ impl LspClient {
         startup_timeout: Duration,
         diagnostics_timeout: Duration,
     ) -> Self {
-        let _ = DEFAULT_STARTUP_TIMEOUT;
         Self {
             command: server.command.clone(),
             args: server.args.clone(),
@@ -61,6 +59,7 @@ impl LspClient {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn startup_timeout(&self) -> Duration {
         self.startup_timeout
     }
@@ -182,18 +181,22 @@ fn assert_initialize_response(response: &serde_json::Value) -> Result<()> {
 }
 
 fn is_publish_diagnostics_for(message: &serde_json::Value, uri: &str) -> bool {
-    message.get("method").and_then(|m| m.as_str()) == Some("textDocument/publishDiagnostics")
-        && message.pointer("/params/uri").and_then(|u| u.as_str()) == Some(uri)
+    message.get("method").and_then(serde_json::Value::as_str)
+        == Some("textDocument/publishDiagnostics")
+        && message
+            .pointer("/params/uri")
+            .and_then(serde_json::Value::as_str)
+            == Some(uri)
 }
 
 fn parse_diagnostics(message: &serde_json::Value) -> Vec<Diagnostic> {
     let uri = message
         .pointer("/params/uri")
-        .and_then(|u| u.as_str())
+        .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
     message
         .pointer("/params/diagnostics")
-        .and_then(|d| d.as_array())
+        .and_then(serde_json::Value::as_array)
         .cloned()
         .unwrap_or_default()
         .iter()
@@ -206,16 +209,19 @@ fn parse_one(uri: &str, value: &serde_json::Value) -> Option<Diagnostic> {
         uri: uri.to_string(),
         line: value
             .pointer("/range/start/line")
-            .and_then(|v| v.as_u64())? as u32,
+            .and_then(serde_json::Value::as_u64)? as u32,
         character: value
             .pointer("/range/start/character")
-            .and_then(|v| v.as_u64())? as u32,
+            .and_then(serde_json::Value::as_u64)? as u32,
         severity: DiagnosticSeverity::from_lsp(
-            value.get("severity").and_then(|v| v.as_u64()).unwrap_or(1) as u32,
+            value
+                .get("severity")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(1) as u32,
         ),
         message: value
             .get("message")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .unwrap_or_default()
             .to_string(),
         code: value.get("code").and_then(|c| {
@@ -225,7 +231,7 @@ fn parse_one(uri: &str, value: &serde_json::Value) -> Option<Diagnostic> {
         }),
         source: value
             .get("source")
-            .and_then(|s| s.as_str())
+            .and_then(serde_json::Value::as_str)
             .map(str::to_string),
     })
 }
@@ -261,11 +267,6 @@ async fn shutdown_silently(child: &mut Child) {
     }
     let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
     let _ = child.kill().await;
-}
-
-/// Default diagnostics wait when no config override is set.
-pub fn default_diagnostics_timeout() -> Duration {
-    DEFAULT_DIAGNOSTICS_TIMEOUT
 }
 
 #[cfg(test)]
